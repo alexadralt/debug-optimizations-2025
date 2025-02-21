@@ -11,36 +11,50 @@ public class DCT
 		var width = input.GetLength(1);
 		var coeffs = new double[width, height];
 
-		MathEx.LoopByTwoVariables(
-			0, width,
-			0, height,
-			(u, v) =>
+		for (var u = 0; u < width; u++)
+		{
+			for (var v = 0; v < height; v++)
 			{
-				var sum = MathEx
-					.SumByTwoVariables(
-						0, width,
-						0, height,
-						(x, y) => BasisFunction(input[x, y], u, v, x, y, height, width));
-
+				var sum = 0d;
+				for (var x = 0; x < width; x++)
+				{
+					var xSum = 0d;
+					for (var y = 0; y < height; y++)
+					{
+						xSum += BasisFunction(input[x, y], u, v, x, y, height, width);
+					}
+					
+					sum += xSum;
+				}
+				
 				coeffs[u, v] = sum * Beta(height, width) * Alpha(u) * Alpha(v);
-			});
+			}
+		}
 
 		return coeffs;
 	}
 
 	public static void IDCT2D(double[,] coeffs, double[,] output)
 	{
-		for (var x = 0; x < coeffs.GetLength(1); x++)
+		var width = coeffs.GetLength(1);
+		var height = coeffs.GetLength(0);
+		
+		for (var x = 0; x < width; x++)
 		{
-			for (var y = 0; y < coeffs.GetLength(0); y++)
+			for (var y = 0; y < height; y++)
 			{
-				var sum = MathEx
-					.SumByTwoVariables(
-						0, coeffs.GetLength(1),
-						0, coeffs.GetLength(0),
-						(u, v) =>
-							BasisFunction(coeffs[u, v], u, v, x, y, coeffs.GetLength(0), coeffs.GetLength(1)) *
-							Alpha(u) * Alpha(v));
+				var sum = 0d;
+				for (var u = 0; u < width; u++)
+				{
+					var uSum = 0d;
+					for (var v = 0; v < height; v++)
+					{
+						uSum += BasisFunction(coeffs[u, v], u, v, x, y, coeffs.GetLength(0), coeffs.GetLength(1))
+						        * Alpha(u) * Alpha(v);
+					}
+
+					sum += uSum;
+				}
 
 				output[x, y] = sum * Beta(coeffs.GetLength(0), coeffs.GetLength(1));
 			}
