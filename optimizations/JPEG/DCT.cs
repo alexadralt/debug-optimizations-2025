@@ -9,6 +9,7 @@ public class DCT
 	{
 		var height = input.GetLength(0);
 		var width = input.GetLength(1);
+		var beta = Beta(height, width);
 		var coeffs = new double[width, height];
 
 		for (var u = 0; u < width; u++)
@@ -27,7 +28,7 @@ public class DCT
 					sum += xSum;
 				}
 				
-				coeffs[u, v] = sum * Beta(height, width) * Alpha(u) * Alpha(v);
+				coeffs[u, v] = sum * beta * Alpha(u) * Alpha(v);
 			}
 		}
 
@@ -38,6 +39,7 @@ public class DCT
 	{
 		var width = coeffs.GetLength(1);
 		var height = coeffs.GetLength(0);
+		var beta = Beta(height, width);
 		
 		for (var x = 0; x < width; x++)
 		{
@@ -49,14 +51,14 @@ public class DCT
 					var uSum = 0d;
 					for (var v = 0; v < height; v++)
 					{
-						uSum += BasisFunction(coeffs[u, v], u, v, x, y, coeffs.GetLength(0), coeffs.GetLength(1))
+						uSum += BasisFunction(coeffs[u, v], u, v, x, y, height, width)
 						        * Alpha(u) * Alpha(v);
 					}
 
 					sum += uSum;
 				}
 
-				output[x, y] = sum * Beta(coeffs.GetLength(0), coeffs.GetLength(1));
+				output[x, y] = sum * beta;
 			}
 		}
 	}
@@ -72,7 +74,7 @@ public class DCT
 	private static double Alpha(int u)
 	{
 		if (u == 0)
-			return 1 / Math.Sqrt(2);
+			return 0.70710678118654752440084436210485d; // 1 / sqrt(2)
 		return 1;
 	}
 
