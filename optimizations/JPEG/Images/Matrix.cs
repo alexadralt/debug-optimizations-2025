@@ -1,4 +1,5 @@
 ﻿using System.Drawing;
+using System.Drawing.Imaging;
 
 namespace JPEG.Images;
 
@@ -14,25 +15,40 @@ class Matrix
 		Width = width;
 
 		Pixels = new Pixel[height, width];
-		for (var i = 0; i < height; ++i)
-		for (var j = 0; j < width; ++j)
-			Pixels[i, j] = new Pixel(0, 0, 0, PixelFormat.RGB);
+		// Pixels = GC.AllocateUninitializedArray<Pixel>(height * width);
 	}
 
 	public static explicit operator Matrix(Bitmap bmp)
 	{
-		var height = bmp.Height - bmp.Height % 8;
-		var width = bmp.Width - bmp.Width % 8;
+		var bmpHeight = bmp.Height;
+		var bmpWidth = bmp.Width;
+		var height = bmpHeight - bmpHeight % 8;
+		var width = bmpWidth - bmpWidth % 8;
+
+		var data = bmp.LockBits(new Rectangle(0, 0, bmpWidth, bmpHeight), ImageLockMode.ReadOnly, bmp.PixelFormat);
+		
 		var matrix = new Matrix(height, width);
 
-		for (var j = 0; j < height; j++)
+		unsafe
 		{
-			for (var i = 0; i < width; i++)
+			var dataPtr = (byte*)data.Scan0;
+			fixed (Pixel* ptr = matrix.Pixels)
 			{
-				var pixel = bmp.GetPixel(i, j);
-				matrix.Pixels[j, i] = new Pixel(pixel.R, pixel.G, pixel.B, PixelFormat.RGB);
+				var pixel = ptr;
+				for (var i = 0; i < height; i++)
+				{
+					for (var j = 0; j < width; j++, pixel++)
+					{
+						pixel->value3 = *dataPtr++;
+						pixel->value2 = *dataPtr++;
+						pixel->value1 = *dataPtr++;
+						pixel->format = PixelFormat.RGB;
+					}
+				}
 			}
 		}
+		
+		bmp.UnlockBits(data);
 
 		return matrix;
 	}

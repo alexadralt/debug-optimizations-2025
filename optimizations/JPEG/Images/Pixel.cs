@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace JPEG.Images;
 
-public readonly struct Pixel
+public struct Pixel
 {
 	public Pixel(double firstComponent, double secondComponent, double thirdComponent, PixelFormat pixelFormat)
 	{
@@ -25,10 +25,10 @@ public readonly struct Pixel
 		}
 	}
 
-	private readonly PixelFormat format;
-	private readonly double value1;
-	private readonly double value2;
-	private readonly double value3;
+	public PixelFormat format;
+	public double value1;
+	public double value2;
+	public double value3;
 
 	public double R => format == PixelFormat.RGB ? value1 : (298.082 * value1 + 408.583 * Cr) / 256.0 - 222.921;
 
