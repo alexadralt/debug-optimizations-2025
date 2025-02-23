@@ -12,7 +12,7 @@ public class JpegProcessor : IJpegProcessor
 {
 	public static readonly JpegProcessor Init = new();
 	public const int CompressionQuality = 70;
-	private const int DCTSize = 8;
+	public const int DCTSize = 8;
 
 	public void Compress(string imagePath, string compressedImagePath)
 	{

@@ -1,50 +1,64 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using JPEG.Processor;
 
 namespace JPEG;
 
 public class DCT
 {
-	public static double[,] DCT2D(double[,] input)
+	private static double[] _cosines;
+
+	static DCT()
 	{
-		var height = input.GetLength(0);
-		var width = input.GetLength(1);
-		var beta = Beta(height, width);
-		var coeffs = new double[width, height];
+		var squaredSize = JpegProcessor.DCTSize * JpegProcessor.DCTSize;
+		_cosines = GC.AllocateUninitializedArray<double>(squaredSize * 2);
 
-		var result = Parallel.ForEach(Loop(width, height), (tuple, _) =>
+		var doubleSize = JpegProcessor.DCTSize * 2;
+		for (var u = 0; u < JpegProcessor.DCTSize; u++)
 		{
-			var (u, v) = tuple;
-			var sum = 0d;
-			for (var x = 0; x < width; x++)
+			for (var x = 0; x < JpegProcessor.DCTSize; x++)
 			{
-				var xSum = 0d;
-				for (var y = 0; y < height; y++)
-				{
-					xSum += BasisFunction(input[x, y], u, v, x, y, height, width);
-				}
-				
-				sum += xSum;
-			}
-			
-			coeffs[u, v] = sum * beta * Alpha(u) * Alpha(v);
-		});
-		
-		while (!result.IsCompleted) { }
-
-		return coeffs;
-	}
-
-	private static IEnumerable<(int, int)> Loop(int width, int height)
-	{
-		for (var u = 0; u < width; u++)
-		{
-			for (var v = 0; v < height; v++)
-			{
-				yield return (u, v);
+				_cosines[u * JpegProcessor.DCTSize + x] = Math.Cos(((2d * x + 1d) * u * Math.PI) / doubleSize);
 			}
 		}
+
+		for (var v = 0; v < JpegProcessor.DCTSize; v++)
+		{
+			for (var y = 0; y < JpegProcessor.DCTSize; y++)
+			{
+				_cosines[squaredSize + v * JpegProcessor.DCTSize + y] = Math.Cos(((2d * y + 1d) * v * Math.PI) / doubleSize);
+			}
+		}
+	}
+	
+	public static double[,] DCT2D(double[,] input)
+	{
+		var beta = Beta(JpegProcessor.DCTSize, JpegProcessor.DCTSize);
+		var squaredSize = JpegProcessor.DCTSize * JpegProcessor.DCTSize;
+		var coeffs = new double[JpegProcessor.DCTSize, JpegProcessor.DCTSize];
+
+		for (var u = 0; u < JpegProcessor.DCTSize; u++)
+		{
+			for (var v = 0; v < JpegProcessor.DCTSize; v++)
+			{
+				var sum = 0d;
+				for (var x = 0; x < JpegProcessor.DCTSize; x++)
+				{
+					var b = _cosines[u * JpegProcessor.DCTSize + x];
+					var xSum = 0d;
+					for (var y = 0; y < JpegProcessor.DCTSize; y++)
+					{
+						var c = _cosines[squaredSize + v * JpegProcessor.DCTSize + y];
+						xSum += input[x, y] * c;
+					}
+				
+					sum += xSum * b;
+				}
+			
+				coeffs[u, v] = sum * beta * Alpha(u) * Alpha(v);
+			}
+		}
+
+		return coeffs;
 	}
 
 	public static void IDCT2D(double[,] coeffs, double[,] output)
