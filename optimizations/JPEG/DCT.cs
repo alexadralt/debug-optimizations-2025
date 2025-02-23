@@ -1,5 +1,6 @@
 ﻿using System;
-using JPEG.Utilities;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace JPEG;
 
@@ -12,27 +13,38 @@ public class DCT
 		var beta = Beta(height, width);
 		var coeffs = new double[width, height];
 
+		var result = Parallel.ForEach(Loop(width, height), (tuple, _) =>
+		{
+			var (u, v) = tuple;
+			var sum = 0d;
+			for (var x = 0; x < width; x++)
+			{
+				var xSum = 0d;
+				for (var y = 0; y < height; y++)
+				{
+					xSum += BasisFunction(input[x, y], u, v, x, y, height, width);
+				}
+				
+				sum += xSum;
+			}
+			
+			coeffs[u, v] = sum * beta * Alpha(u) * Alpha(v);
+		});
+		
+		while (!result.IsCompleted) { }
+
+		return coeffs;
+	}
+
+	private static IEnumerable<(int, int)> Loop(int width, int height)
+	{
 		for (var u = 0; u < width; u++)
 		{
 			for (var v = 0; v < height; v++)
 			{
-				var sum = 0d;
-				for (var x = 0; x < width; x++)
-				{
-					var xSum = 0d;
-					for (var y = 0; y < height; y++)
-					{
-						xSum += BasisFunction(input[x, y], u, v, x, y, height, width);
-					}
-					
-					sum += xSum;
-				}
-				
-				coeffs[u, v] = sum * beta * Alpha(u) * Alpha(v);
+				yield return (u, v);
 			}
 		}
-
-		return coeffs;
 	}
 
 	public static void IDCT2D(double[,] coeffs, double[,] output)
