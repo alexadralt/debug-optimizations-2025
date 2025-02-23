@@ -73,9 +73,9 @@ public class JpegProcessor : IJpegProcessor
 			{
 				for (var x = 0; x < image.Width; x += DCTSize)
 				{
-					var _y = new double[DCTSize, DCTSize];
-					var cb = new double[DCTSize, DCTSize];
-					var cr = new double[DCTSize, DCTSize];
+					var _y = new double[DCTSize * DCTSize];
+					var cb = new double[DCTSize * DCTSize];
+					var cr = new double[DCTSize * DCTSize];
 					foreach (var channel in new[] { _y, cb, cr })
 					{
 						var quantizedBytes = new byte[DCTSize * DCTSize];
@@ -94,34 +94,34 @@ public class JpegProcessor : IJpegProcessor
 		return result;
 	}
 
-	private static void ShiftMatrixValues(double[,] subMatrix, int shiftValue)
+	private static void ShiftMatrixValues(double[] subMatrix, int shiftValue)
 	{
-		var height = subMatrix.GetLength(0);
-		var width = subMatrix.GetLength(1);
+		var height = DCTSize;
+		var width = DCTSize;
 
 		for (var y = 0; y < height; y++)
 		for (var x = 0; x < width; x++)
-			subMatrix[y, x] = subMatrix[y, x] + shiftValue;
+			subMatrix[y * height + x] += shiftValue;
 	}
 
-	private static void SetPixels(Matrix matrix, double[,] a, double[,] b, double[,] c, PixelFormat format,
+	private static void SetPixels(Matrix matrix, double[] a, double[] b, double[] c, PixelFormat format,
 		int yOffset, int xOffset)
 	{
-		var height = a.GetLength(0);
-		var width = a.GetLength(1);
+		var height = DCTSize;
+		var width = DCTSize;
 
 		for (var y = 0; y < height; y++)
 		for (var x = 0; x < width; x++)
-			matrix.Pixels[yOffset + y, xOffset + x] = new Pixel(a[y, x], b[y, x], c[y, x], format);
+			matrix.Pixels[yOffset + y, xOffset + x] = new Pixel(a[y * height + x], b[y * height + x], c[y * height + x], format);
 	}
 
-	private static double[,] GetSubMatrix(Matrix matrix, int yOffset, int yLength, int xOffset, int xLength,
+	private static double[] GetSubMatrix(Matrix matrix, int yOffset, int yLength, int xOffset, int xLength,
 		Func<Pixel, double> componentSelector)
 	{
-		var result = new double[yLength, xLength];
+		var result = new double[yLength * xLength];
 		for (var j = 0; j < yLength; j++)
 		for (var i = 0; i < xLength; i++)
-			result[j, i] = componentSelector(matrix.Pixels[yOffset + j, xOffset + i]);
+			result[j * yLength + i] = componentSelector(matrix.Pixels[yOffset + j, xOffset + i]);
 		return result;
 	}
 
@@ -187,16 +187,18 @@ public class JpegProcessor : IJpegProcessor
 		};
 	}
 
-	private static byte[,] Quantize(double[,] channelFreqs, int quality)
+	private static byte[,] Quantize(double[] channelFreqs, int quality)
 	{
-		var result = new byte[channelFreqs.GetLength(0), channelFreqs.GetLength(1)];
+		var width = DCTSize;
+		var height = DCTSize;
+		var result = new byte[width, height];
 
 		var quantizationMatrix = GetQuantizationMatrix(quality);
-		for (int y = 0; y < channelFreqs.GetLength(0); y++)
+		for (int y = 0; y < width; y++)
 		{
-			for (int x = 0; x < channelFreqs.GetLength(1); x++)
+			for (int x = 0; x < height; x++)
 			{
-				result[y, x] = (byte)(channelFreqs[y, x] / quantizationMatrix[y, x]);
+				result[y, x] = (byte)(channelFreqs[y * width + x] / quantizationMatrix[y, x]);
 			}
 		}
 

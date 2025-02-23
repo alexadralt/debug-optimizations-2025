@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 using JPEG.Processor;
 
 namespace JPEG;
@@ -30,38 +32,48 @@ public class DCT
 		}
 	}
 	
-	public static double[,] DCT2D(double[,] input)
+	public static double[] DCT2D(double[] input)
 	{
 		var beta = Beta(JpegProcessor.DCTSize, JpegProcessor.DCTSize);
 		var squaredSize = JpegProcessor.DCTSize * JpegProcessor.DCTSize;
-		var coeffs = new double[JpegProcessor.DCTSize, JpegProcessor.DCTSize];
+		var coeffs = GC.AllocateUninitializedArray<double>(squaredSize);
 
 		for (var u = 0; u < JpegProcessor.DCTSize; u++)
 		{
 			for (var v = 0; v < JpegProcessor.DCTSize; v++)
 			{
 				var sum = 0d;
+				var count = Vector<double>.Count;
+				var len = JpegProcessor.DCTSize / count;
+				var inputOffset = 0;
+				
 				for (var x = 0; x < JpegProcessor.DCTSize; x++)
 				{
 					var b = _cosines[u * JpegProcessor.DCTSize + x];
-					var xSum = 0d;
-					for (var y = 0; y < JpegProcessor.DCTSize; y++)
+					var xSum = Vector<double>.Zero;
+					
+					var cCosineOffset = squaredSize + v * JpegProcessor.DCTSize;
+					
+					for (var y = 0;
+					     y < len;
+					     y++, inputOffset += count, cCosineOffset += count)
 					{
-						var c = _cosines[squaredSize + v * JpegProcessor.DCTSize + y];
-						xSum += input[x, y] * c;
+						var c = new Vector<double>(_cosines, cCosineOffset);
+						var inputElem = new Vector<double>(input, inputOffset);
+						xSum += inputElem * c;
 					}
 				
-					sum += xSum * b;
+					sum += Vector.Sum(xSum) * b;
 				}
 			
-				coeffs[u, v] = sum * beta * Alpha(u) * Alpha(v);
+				coeffs[u * JpegProcessor.DCTSize + v] = sum * beta * Alpha(u) * Alpha(v);
 			}
 		}
 
 		return coeffs;
 	}
 
-	public static void IDCT2D(double[,] coeffs, double[,] output)
+	public static void IDCT2D(double[,] coeffs, double[] output)
 	{
 		var width = coeffs.GetLength(1);
 		var height = coeffs.GetLength(0);
@@ -84,7 +96,7 @@ public class DCT
 					sum += uSum;
 				}
 
-				output[x, y] = sum * beta;
+				output[x * height + y] = sum * beta;
 			}
 		}
 	}
@@ -97,6 +109,7 @@ public class DCT
 		return a * b * c;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static double Alpha(int u)
 	{
 		if (u == 0)
@@ -104,6 +117,7 @@ public class DCT
 		return 1;
 	}
 
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static double Beta(int height, int width)
 	{
 		return 1d / width + 1d / height;
