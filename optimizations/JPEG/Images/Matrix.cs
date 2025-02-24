@@ -69,7 +69,7 @@ class Matrix
 		return bmp;
 	}
 
-	public static int ToByte(double d)
+	public static int ToByte(float d)
 	{
 		var val = (int)d;
 		if (val > byte.MaxValue)
