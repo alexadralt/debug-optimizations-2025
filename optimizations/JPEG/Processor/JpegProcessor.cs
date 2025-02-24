@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using JPEG.Images;
-using PixelFormat = JPEG.Images.PixelFormat;
 
 namespace JPEG.Processor;
 
@@ -34,13 +36,20 @@ public class JpegProcessor : IJpegProcessor
 
 	private static CompressedImage Compress(Matrix matrix, int quality = 50)
 	{
-		var allQuantizedBytes = new List<byte>();
+		var bytesCollection = new List<((int, int), List<byte>)>();
 
-		var subMatrix = new float[DCTSize * DCTSize];
-		for (var y = 0; y < matrix.Height; y += DCTSize)
+		var source = GetXYSequence(matrix.Width, matrix.Height).ToArray();
+		var partitioner = Partitioner.Create(0, source.Length);
+		Parallel.ForEach(partitioner, range =>
 		{
-			for (var x = 0; x < matrix.Width; x += DCTSize)
+			var subMatrix = new float[DCTSize * DCTSize];
+			
+			for (var k = range.Item1; k < range.Item2; k++)
 			{
+				var tuple = source[k];
+				var (x, y) = tuple;
+				var bytes = new List<byte>();
+
 				// Y
 				{
 					for (var j = 0; j < DCTSize; j++)
@@ -59,9 +68,9 @@ public class JpegProcessor : IJpegProcessor
 					var channelFreqs = DCT.DCT2D(subMatrix);
 					var quantizedFreqs = Quantize(channelFreqs, quality);
 					var quantizedBytes = ZigZagScan(quantizedFreqs);
-					allQuantizedBytes.AddRange(quantizedBytes);
+					bytes.AddRange(quantizedBytes);
 				}
-				
+
 				// Cb
 				{
 					for (var j = 0; j < DCTSize; j++)
@@ -71,8 +80,8 @@ public class JpegProcessor : IJpegProcessor
 							var pixel = matrix.Pixels[y + j, x + i];
 							subMatrix[j * DCTSize + i] = 128.0f
 							                             + (-37.945f * pixel.value1
-								                             - 74.494f * pixel.value2
-								                             + 112.439f * pixel.value3) / 256.0f;
+							                                - 74.494f * pixel.value2
+							                                + 112.439f * pixel.value3) / 256.0f;
 						}
 					}
 
@@ -80,9 +89,9 @@ public class JpegProcessor : IJpegProcessor
 					var channelFreqs = DCT.DCT2D(subMatrix);
 					var quantizedFreqs = Quantize(channelFreqs, quality);
 					var quantizedBytes = ZigZagScan(quantizedFreqs);
-					allQuantizedBytes.AddRange(quantizedBytes);
+					bytes.AddRange(quantizedBytes);
 				}
-				
+
 				// Cr
 				{
 					for (var j = 0; j < DCTSize; j++)
@@ -101,9 +110,45 @@ public class JpegProcessor : IJpegProcessor
 					var channelFreqs = DCT.DCT2D(subMatrix);
 					var quantizedFreqs = Quantize(channelFreqs, quality);
 					var quantizedBytes = ZigZagScan(quantizedFreqs);
-					allQuantizedBytes.AddRange(quantizedBytes);
+					bytes.AddRange(quantizedBytes);
+				}
+
+				lock (bytesCollection)
+				{
+					bytesCollection.Add((tuple, bytes));
 				}
 			}
+		});
+		
+		var allQuantizedBytes = new List<byte>();
+		bytesCollection.Sort((x, y) =>
+		{
+			var tupleX = x.Item1;
+			var tupleY = y.Item1;
+			if (tupleX.Item2 < tupleY.Item2)
+			{
+				return -1;
+			}
+			if (tupleX.Item2 > tupleY.Item2)
+			{
+				return 1;
+			}
+
+			if (tupleX.Item1 < tupleY.Item1)
+			{
+				return -1;
+			}
+			if (tupleX.Item1 > tupleY.Item1)
+			{
+				return 1;
+			}
+
+			return 0;
+		});
+
+		for (var i = 0; i < bytesCollection.Count; i++)
+		{
+			allQuantizedBytes.AddRange(bytesCollection[i].Item2);
 		}
 
 		long bitsCount;
@@ -115,6 +160,17 @@ public class JpegProcessor : IJpegProcessor
 			Quality = quality, CompressedBytes = compressedBytes, BitsCount = bitsCount, DecodeTable = decodeTable,
 			Height = matrix.Height, Width = matrix.Width
 		};
+	}
+
+	private static IEnumerable<(int, int)> GetXYSequence(int width, int height)
+	{
+		for (var y = 0; y < height; y += DCTSize)
+		{
+			for (var x = 0; x < width; x += DCTSize)
+			{
+				yield return (x, y);
+			}
+		}
 	}
 
 	private static Matrix Uncompress(CompressedImage image)
