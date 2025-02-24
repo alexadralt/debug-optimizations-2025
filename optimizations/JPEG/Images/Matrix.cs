@@ -42,7 +42,6 @@ class Matrix
 						pixel->value3 = *dataPtr++;
 						pixel->value2 = *dataPtr++;
 						pixel->value1 = *dataPtr++;
-						pixel->format = PixelFormat.RGB;
 					}
 				}
 			}
@@ -62,7 +61,10 @@ class Matrix
 			for (var i = 0; i < bmp.Width; i++)
 			{
 				var pixel = matrix.Pixels[j, i];
-				bmp.SetPixel(i, j, Color.FromArgb(ToByte(pixel.R), ToByte(pixel.G), ToByte(pixel.B)));
+				var r = (298.082f * pixel.value1 + 408.583f * pixel.value3) / 256.0f - 222.921f;
+				var g = (298.082f * pixel.value1 - 100.291f * pixel.value2 - 208.120f * pixel.value3) / 256.0f + 135.576f;
+				var b = (298.082f * pixel.value1 + 516.412f * pixel.value2) / 256.0f - 276.836f;
+				bmp.SetPixel(i, j, Color.FromArgb(ToByte(r), ToByte(g), ToByte(b)));
 			}
 		}
 
