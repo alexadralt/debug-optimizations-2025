@@ -151,9 +151,7 @@ public class JpegProcessor : IJpegProcessor
 			allQuantizedBytes.AddRange(bytesCollection[i].Item2);
 		}
 
-		long bitsCount;
-		Dictionary<BitsWithLength, byte> decodeTable;
-		var compressedBytes = HuffmanCodec.Encode(allQuantizedBytes, out decodeTable, out bitsCount);
+		var compressedBytes = HuffmanCodec.Encode(allQuantizedBytes, out var decodeTable, out var bitsCount);
 
 		return new CompressedImage
 		{
@@ -176,28 +174,43 @@ public class JpegProcessor : IJpegProcessor
 	private static Matrix Uncompress(CompressedImage image)
 	{
 		var result = new Matrix(image.Height, image.Width);
-		using (var allQuantizedBytes =
-		       new MemoryStream(HuffmanCodec.Decode(image.CompressedBytes, image.DecodeTable, image.BitsCount)))
+		using var allQuantizedBytes =
+			new MemoryStream(HuffmanCodec.Decode(image.CompressedBytes, image.DecodeTable, image.BitsCount));
+		for (var y = 0; y < image.Height; y += DCTSize)
 		{
-			for (var y = 0; y < image.Height; y += DCTSize)
+			for (var x = 0; x < image.Width; x += DCTSize)
 			{
-				for (var x = 0; x < image.Width; x += DCTSize)
+				float[] _y;
 				{
-					var _y = new float[DCTSize * DCTSize];
-					var cb = new float[DCTSize * DCTSize];
-					var cr = new float[DCTSize * DCTSize];
-					foreach (var channel in new[] { _y, cb, cr })
-					{
-						var quantizedBytes = new byte[DCTSize * DCTSize];
-						allQuantizedBytes.ReadAsync(quantizedBytes, 0, quantizedBytes.Length).Wait();
-						var quantizedFreqs = ZigZagUnScan(quantizedBytes);
-						var channelFreqs = DeQuantize(quantizedFreqs, image.Quality);
-						DCT.IDCT2D(channelFreqs, channel);
-						ShiftMatrixValues(channel, 128);
-					}
-
-					SetPixels(result, _y, cb, cr, y, x);
+					var quantizedBytes = new byte[DCTSize * DCTSize];
+					allQuantizedBytes.ReadAsync(quantizedBytes, 0, quantizedBytes.Length).Wait();
+					var quantizedFreqs = ZigZagUnScan(quantizedBytes);
+					var channelFreqs = DeQuantize(quantizedFreqs, image.Quality);
+					_y = DCT.IDCT2D(channelFreqs);
+					ShiftMatrixValues(_y, 128);
 				}
+					
+				float[] cb;
+				{
+					var quantizedBytes = new byte[DCTSize * DCTSize];
+					allQuantizedBytes.ReadAsync(quantizedBytes, 0, quantizedBytes.Length).Wait();
+					var quantizedFreqs = ZigZagUnScan(quantizedBytes);
+					var channelFreqs = DeQuantize(quantizedFreqs, image.Quality);
+					cb = DCT.IDCT2D(channelFreqs);
+					ShiftMatrixValues(cb, 128);
+				}
+					
+				float[] cr;
+				{
+					var quantizedBytes = new byte[DCTSize * DCTSize];
+					allQuantizedBytes.ReadAsync(quantizedBytes, 0, quantizedBytes.Length).Wait();
+					var quantizedFreqs = ZigZagUnScan(quantizedBytes);
+					var channelFreqs = DeQuantize(quantizedFreqs, image.Quality);
+					cr = DCT.IDCT2D(channelFreqs);
+					ShiftMatrixValues(cr, 128);
+				}
+
+				SetPixels(result, _y, cb, cr, y, x);
 			}
 		}
 
@@ -304,18 +317,18 @@ public class JpegProcessor : IJpegProcessor
 		return result;
 	}
 
-	private static float[,] DeQuantize(byte[,] quantizedBytes, int quality)
+	private static float[] DeQuantize(byte[,] quantizedBytes, int quality)
 	{
-		var result = new float[quantizedBytes.GetLength(0), quantizedBytes.GetLength(1)];
+		var result = GC.AllocateUninitializedArray<float>(DCTSize * DCTSize);
 		var quantizationMatrix = GetQuantizationMatrix(quality);
 
-		for (int y = 0; y < quantizedBytes.GetLength(0); y++)
+		for (int y = 0; y < DCTSize; y++)
 		{
-			for (int x = 0; x < quantizedBytes.GetLength(1); x++)
+			for (int x = 0; x < DCTSize; x++)
 			{
-				result[y, x] =
+				result[y * DCTSize + x] =
 					((sbyte)quantizedBytes[y, x]) *
-					quantizationMatrix[y, x]; //NOTE cast to sbyte not to loose negative numbers
+					quantizationMatrix[y, x]; //NOTE cast to sbyte not to lose negative numbers
 			}
 		}
 

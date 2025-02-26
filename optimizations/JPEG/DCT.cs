@@ -8,6 +8,8 @@ namespace JPEG;
 public class DCT
 {
 	private static float[] _cosines;
+	private static float[] _cosindesSecondHalfTransposed;
+	private static Vector<float> _alphas0;
 
 	static DCT()
 	{
@@ -23,18 +25,30 @@ public class DCT
 			}
 		}
 
+		_cosindesSecondHalfTransposed = GC.AllocateUninitializedArray<float>(squaredSize);
 		for (var v = 0; v < JpegProcessor.DCTSize; v++)
 		{
 			for (var y = 0; y < JpegProcessor.DCTSize; y++)
 			{
-				_cosines[squaredSize + v * JpegProcessor.DCTSize + y] = (float)Math.Cos(((2d * y + 1d) * v * Math.PI) / doubleSize);
+				var value = (float)Math.Cos(((2d * y + 1d) * v * Math.PI) / doubleSize);
+				_cosines[squaredSize + v * JpegProcessor.DCTSize + y] = value;
+				_cosindesSecondHalfTransposed[y * JpegProcessor.DCTSize + v] = value;
 			}
 		}
+
+		var alphas = GC.AllocateUninitializedArray<float>(Vector<float>.Count);
+		alphas[0] = 0.70710678118654752440084436210485f;
+		for (var i = 1; i < alphas.Length; i++)
+		{
+			alphas[i] = 1;
+		}
+
+		_alphas0 = new Vector<float>(alphas);
 	}
 	
 	public static float[] DCT2D(float[] input)
 	{
-		var beta = Beta(JpegProcessor.DCTSize, JpegProcessor.DCTSize);
+		var beta = 2f * (1f / JpegProcessor.DCTSize);
 		var squaredSize = JpegProcessor.DCTSize * JpegProcessor.DCTSize;
 		var coeffs = GC.AllocateUninitializedArray<float>(squaredSize);
 
@@ -73,40 +87,52 @@ public class DCT
 		return coeffs;
 	}
 
-	public static void IDCT2D(float[,] coeffs, float[] output)
+	public static float[] IDCT2D(float[] coeffs)
 	{
-		var width = coeffs.GetLength(1);
-		var height = coeffs.GetLength(0);
-		var beta = Beta(height, width);
+		var beta = 2f * (1f / JpegProcessor.DCTSize);
+		var squaredSize = JpegProcessor.DCTSize * JpegProcessor.DCTSize;
+		var output = GC.AllocateUninitializedArray<float>(squaredSize);
 		
-		for (var x = 0; x < width; x++)
+		for (var x = 0; x < JpegProcessor.DCTSize; x++)
 		{
-			for (var y = 0; y < height; y++)
+			for (var y = 0; y < JpegProcessor.DCTSize; y++)
 			{
 				var sum = 0f;
-				for (var u = 0; u < width; u++)
+				var count = Vector<float>.Count;
+				var len = JpegProcessor.DCTSize / count;
+				var coeffsOffset = 0;
+				
+				for (var u = 0; u < JpegProcessor.DCTSize; u++)
 				{
-					var uSum = 0f;
-					for (var v = 0; v < height; v++)
+					var b = _cosines[u * JpegProcessor.DCTSize + x];
+					var uSum = Vector<float>.Zero;
+					
+					var cCosineOffset = y * JpegProcessor.DCTSize;
+
 					{
-						uSum += BasisFunction(coeffs[u, v], u, v, x, y, height, width)
-						        * Alpha(u) * Alpha(v);
+						var c = new Vector<float>(_cosindesSecondHalfTransposed, cCosineOffset);
+						var coeffsElem = new Vector<float>(coeffs, coeffsOffset);
+						uSum += coeffsElem * c * _alphas0 * Alpha(u);
+						
+						cCosineOffset += count;
+						coeffsOffset += count;
+					}
+					
+					for (var v = 1; v < len; v++, cCosineOffset += count, coeffsOffset += count)
+					{
+						var c = new Vector<float>(_cosindesSecondHalfTransposed, cCosineOffset);
+						var coeffsElem = new Vector<float>(coeffs, coeffsOffset);
+						uSum += coeffsElem * c * Vector<float>.One * Alpha(u);
 					}
 
-					sum += uSum;
+					sum += Vector.Sum(uSum) * b;
 				}
 
-				output[x * height + y] = sum * beta;
+				output[x * JpegProcessor.DCTSize + y] = sum * beta;
 			}
 		}
-	}
 
-	public static float BasisFunction(float a, float u, float v, float x, float y, int height, int width)
-	{
-		var b = (float)Math.Cos(((2d * x + 1d) * u * Math.PI) / (2 * width));
-		var c = (float)Math.Cos(((2d * y + 1d) * v * Math.PI) / (2 * height));
-
-		return a * b * c;
+		return output;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -115,11 +141,5 @@ public class DCT
 		if (u == 0)
 			return 0.70710678118654752440084436210485f; // 1 / sqrt(2)
 		return 1;
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static float Beta(int height, int width)
-	{
-		return 1f / width + 1f / height;
 	}
 }
