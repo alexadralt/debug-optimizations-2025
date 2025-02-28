@@ -4,8 +4,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using JPEG.Images;
 
@@ -39,16 +37,18 @@ public class JpegProcessor : IJpegProcessor
 	{
 		var bytesCollection = new List<((int, int), List<byte>)>();
 
-		var source = GetXYSequence(matrix.Width, matrix.Height).ToArray();
-		var partitioner = Partitioner.Create(0, source.Length);
+		var width = matrix.Width / DCTSize;
+		var height = matrix.Height / DCTSize;
+		var chunksCount = width * height;
+		var partitioner = Partitioner.Create(0, chunksCount, chunksCount / Environment.ProcessorCount);
 		Parallel.ForEach(partitioner, range =>
 		{
 			var subMatrix = new float[DCTSize * DCTSize];
 			
 			for (var k = range.Item1; k < range.Item2; k++)
 			{
-				var tuple = source[k];
-				var (x, y) = tuple;
+				var x = (k % width) * DCTSize;
+				var y = (k / width) * DCTSize;
 				var bytes = new List<byte>();
 
 				// Y
@@ -116,7 +116,7 @@ public class JpegProcessor : IJpegProcessor
 
 				lock (bytesCollection)
 				{
-					bytesCollection.Add((tuple, bytes));
+					bytesCollection.Add(((x, y), bytes));
 				}
 			}
 		});
@@ -159,17 +159,6 @@ public class JpegProcessor : IJpegProcessor
 			Quality = quality, CompressedBytes = compressedBytes, BitsCount = bitsCount, DecodeTable = decodeTable,
 			Height = matrix.Height, Width = matrix.Width
 		};
-	}
-
-	private static IEnumerable<(int, int)> GetXYSequence(int width, int height)
-	{
-		for (var y = 0; y < height; y += DCTSize)
-		{
-			for (var x = 0; x < width; x += DCTSize)
-			{
-				yield return (x, y);
-			}
-		}
 	}
 
 	private static Matrix Uncompress(CompressedImage image)
