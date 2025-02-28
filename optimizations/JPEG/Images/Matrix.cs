@@ -55,8 +55,9 @@ class Matrix
 	public static explicit operator Bitmap(Matrix matrix)
 	{
 		var (width, height) = (matrix.Width, matrix.Height);
-		var bmp = new Bitmap(width, height);
-		var data = bmp.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.WriteOnly, bmp.PixelFormat);
+		var pixelFormat = System.Drawing.Imaging.PixelFormat.Format24bppRgb;
+		var bmp = new Bitmap(width, height, pixelFormat);
+		var data = bmp.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.WriteOnly, pixelFormat);
 
 		unsafe
 		{
@@ -80,9 +81,6 @@ class Matrix
 						
 						// red channel
 						*dataPtr = ToByte((298.082f * pixel->value1 + 408.583f * pixel->value3) / 256.0f - 222.921f);
-						dataPtr++;
-
-						// alpha channel
 						dataPtr++;
 					}
 				}

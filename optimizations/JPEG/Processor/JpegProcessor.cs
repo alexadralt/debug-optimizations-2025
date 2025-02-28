@@ -237,7 +237,7 @@ public class JpegProcessor : IJpegProcessor
 			matrix.Pixels[yOffset + y, xOffset + x] = new Pixel(a[y * height + x], b[y * height + x], c[y * height + x]);
 	}
 
-	private static IEnumerable<byte> ZigZagScan(byte[,] channelFreqs)
+	private static byte[] ZigZagScan(byte[,] channelFreqs)
 	{
 		return new[]
 		{
@@ -260,7 +260,7 @@ public class JpegProcessor : IJpegProcessor
 		};
 	}
 
-	private static byte[,] ZigZagUnScan(IReadOnlyList<byte> quantizedBytes)
+	private static byte[,] ZigZagUnScan(byte[] quantizedBytes)
 	{
 		return new[,]
 		{
