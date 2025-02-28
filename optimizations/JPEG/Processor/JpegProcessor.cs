@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using JPEG.Images;
 
@@ -171,20 +172,25 @@ public class JpegProcessor : IJpegProcessor
 		}
 	}
 
-	private static Matrix Uncompress(CompressedImage image)
+	private static unsafe Matrix Uncompress(CompressedImage image)
 	{
+		var sizeSquared = DCTSize * DCTSize;
 		var result = new Matrix(image.Height, image.Width);
-		using var allQuantizedBytes =
-			new MemoryStream(HuffmanCodec.Decode(image.CompressedBytes, image.DecodeTable, image.BitsCount));
+		var allQuantizedBytes = HuffmanCodec.Decode(image.CompressedBytes, image.DecodeTable, image.BitsCount);
+		
+		var handle = GCHandle.Alloc(allQuantizedBytes, GCHandleType.Pinned);
+		var bytesPtr = (byte*)handle.AddrOfPinnedObject();
+		var byteSpan = new Span<byte>(bytesPtr, allQuantizedBytes.Length);
+		var index = 0;
+		
 		for (var y = 0; y < image.Height; y += DCTSize)
 		{
 			for (var x = 0; x < image.Width; x += DCTSize)
 			{
 				float[] _y;
 				{
-					var quantizedBytes = new byte[DCTSize * DCTSize];
-					allQuantizedBytes.ReadAsync(quantizedBytes, 0, quantizedBytes.Length).Wait();
-					var quantizedFreqs = ZigZagUnScan(quantizedBytes);
+					var quantizedFreqs = ZigZagUnScan(byteSpan.Slice(index, sizeSquared));
+					index += sizeSquared;
 					var channelFreqs = DeQuantize(quantizedFreqs, image.Quality);
 					_y = DCT.IDCT2D(channelFreqs);
 					ShiftMatrixValues(_y, 128);
@@ -192,9 +198,8 @@ public class JpegProcessor : IJpegProcessor
 					
 				float[] cb;
 				{
-					var quantizedBytes = new byte[DCTSize * DCTSize];
-					allQuantizedBytes.ReadAsync(quantizedBytes, 0, quantizedBytes.Length).Wait();
-					var quantizedFreqs = ZigZagUnScan(quantizedBytes);
+					var quantizedFreqs = ZigZagUnScan(byteSpan.Slice(index, sizeSquared));
+					index += sizeSquared;
 					var channelFreqs = DeQuantize(quantizedFreqs, image.Quality);
 					cb = DCT.IDCT2D(channelFreqs);
 					ShiftMatrixValues(cb, 128);
@@ -202,9 +207,8 @@ public class JpegProcessor : IJpegProcessor
 					
 				float[] cr;
 				{
-					var quantizedBytes = new byte[DCTSize * DCTSize];
-					allQuantizedBytes.ReadAsync(quantizedBytes, 0, quantizedBytes.Length).Wait();
-					var quantizedFreqs = ZigZagUnScan(quantizedBytes);
+					var quantizedFreqs = ZigZagUnScan(byteSpan.Slice(index, sizeSquared));
+					index += sizeSquared;
 					var channelFreqs = DeQuantize(quantizedFreqs, image.Quality);
 					cr = DCT.IDCT2D(channelFreqs);
 					ShiftMatrixValues(cr, 128);
@@ -214,6 +218,7 @@ public class JpegProcessor : IJpegProcessor
 			}
 		}
 
+		handle.Free();
 		return result;
 	}
 
@@ -260,7 +265,7 @@ public class JpegProcessor : IJpegProcessor
 		};
 	}
 
-	private static byte[,] ZigZagUnScan(byte[] quantizedBytes)
+	private static byte[,] ZigZagUnScan(Span<byte> quantizedBytes)
 	{
 		return new[,]
 		{
