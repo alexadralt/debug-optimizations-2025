@@ -122,7 +122,7 @@ public class DCT
 					{
 						var c = new Vector<float>(_cosindesSecondHalfTransposed, cCosineOffset);
 						var coeffsElem = new Vector<float>(coeffs, coeffsOffset);
-						uSum += coeffsElem * c * Vector<float>.One * Alpha(u);
+						uSum += coeffsElem * c * Alpha(u);
 					}
 
 					sum += Vector.Sum(uSum) * b;

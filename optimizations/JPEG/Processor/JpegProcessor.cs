@@ -172,25 +172,29 @@ public class JpegProcessor : IJpegProcessor
 		}
 	}
 
-	private static unsafe Matrix Uncompress(CompressedImage image)
+	private static Matrix Uncompress(CompressedImage image)
 	{
 		var sizeSquared = DCTSize * DCTSize;
 		var result = new Matrix(image.Height, image.Width);
 		var allQuantizedBytes = HuffmanCodec.Decode(image.CompressedBytes, image.DecodeTable, image.BitsCount);
 		
-		var handle = GCHandle.Alloc(allQuantizedBytes, GCHandleType.Pinned);
-		var bytesPtr = (byte*)handle.AddrOfPinnedObject();
-		var byteSpan = new Span<byte>(bytesPtr, allQuantizedBytes.Length);
-		var index = 0;
-		
-		for (var y = 0; y < image.Height; y += DCTSize)
+		var height = image.Height / DCTSize;
+		var width = image.Width / DCTSize;
+
+		var chunksCount = width * height;
+		var partitioner = Partitioner.Create(0, chunksCount, chunksCount / Environment.ProcessorCount);
+		Parallel.ForEach(partitioner, range =>
 		{
-			for (var x = 0; x < image.Width; x += DCTSize)
+			for (int i = range.Item1; i < range.Item2; i++)
 			{
+				var x = (i % width) * DCTSize;
+				var y = (i / width) * DCTSize;
+				var byteIndex = i * 3 * sizeSquared;
+				
 				float[] _y;
 				{
-					var quantizedFreqs = ZigZagUnScan(byteSpan.Slice(index, sizeSquared));
-					index += sizeSquared;
+					var byteSpan = new Span<byte>(allQuantizedBytes, byteIndex, sizeSquared);
+					var quantizedFreqs = ZigZagUnScan(byteSpan);
 					var channelFreqs = DeQuantize(quantizedFreqs, image.Quality);
 					_y = DCT.IDCT2D(channelFreqs);
 					ShiftMatrixValues(_y, 128);
@@ -198,8 +202,8 @@ public class JpegProcessor : IJpegProcessor
 					
 				float[] cb;
 				{
-					var quantizedFreqs = ZigZagUnScan(byteSpan.Slice(index, sizeSquared));
-					index += sizeSquared;
+					var byteSpan = new Span<byte>(allQuantizedBytes, byteIndex + sizeSquared, sizeSquared);
+					var quantizedFreqs = ZigZagUnScan(byteSpan);
 					var channelFreqs = DeQuantize(quantizedFreqs, image.Quality);
 					cb = DCT.IDCT2D(channelFreqs);
 					ShiftMatrixValues(cb, 128);
@@ -207,39 +211,32 @@ public class JpegProcessor : IJpegProcessor
 					
 				float[] cr;
 				{
-					var quantizedFreqs = ZigZagUnScan(byteSpan.Slice(index, sizeSquared));
-					index += sizeSquared;
+					var byteSpan = new Span<byte>(allQuantizedBytes, byteIndex + sizeSquared * 2, sizeSquared);
+					var quantizedFreqs = ZigZagUnScan(byteSpan);
 					var channelFreqs = DeQuantize(quantizedFreqs, image.Quality);
 					cr = DCT.IDCT2D(channelFreqs);
 					ShiftMatrixValues(cr, 128);
 				}
-
+		
 				SetPixels(result, _y, cb, cr, y, x);
 			}
-		}
-
-		handle.Free();
+		});
+		
 		return result;
 	}
 
 	private static void ShiftMatrixValues(float[] subMatrix, int shiftValue)
 	{
-		var height = DCTSize;
-		var width = DCTSize;
-
-		for (var y = 0; y < height; y++)
-		for (var x = 0; x < width; x++)
-			subMatrix[y * height + x] += shiftValue;
+		for (var y = 0; y < DCTSize; y++)
+		for (var x = 0; x < DCTSize; x++)
+			subMatrix[y * DCTSize + x] += shiftValue;
 	}
 
 	private static void SetPixels(Matrix matrix, float[] a, float[] b, float[] c, int yOffset, int xOffset)
 	{
-		var height = DCTSize;
-		var width = DCTSize;
-
-		for (var y = 0; y < height; y++)
-		for (var x = 0; x < width; x++)
-			matrix.Pixels[yOffset + y, xOffset + x] = new Pixel(a[y * height + x], b[y * height + x], c[y * height + x]);
+		for (var y = 0; y < DCTSize; y++)
+		for (var x = 0; x < DCTSize; x++)
+			matrix.Pixels[yOffset + y, xOffset + x] = new Pixel(a[y * DCTSize + x], b[y * DCTSize + x], c[y * DCTSize + x]);
 	}
 
 	private static byte[] ZigZagScan(byte[,] channelFreqs)
