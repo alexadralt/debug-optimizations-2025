@@ -7,9 +7,9 @@ namespace JPEG;
 
 public class DCT
 {
-	private static float[] _cosines;
-	private static float[] _cosindesSecondHalfTransposed;
-	private static Vector<float> _alphas0;
+	private static readonly float[] _cosines;
+	private static readonly float[] _cosindesSecondHalfTransposed;
+	private static readonly Vector<float> _alphas0;
 
 	static DCT()
 	{
@@ -46,11 +46,10 @@ public class DCT
 		_alphas0 = new Vector<float>(alphas);
 	}
 	
-	public static float[] DCT2D(float[] input)
+	public static float[] DCT2D(float[] input, float[] coeffs)
 	{
 		var beta = 2f * (1f / JpegProcessor.DCTSize);
 		var squaredSize = JpegProcessor.DCTSize * JpegProcessor.DCTSize;
-		var coeffs = GC.AllocateUninitializedArray<float>(squaredSize);
 
 		for (var u = 0; u < JpegProcessor.DCTSize; u++)
 		{
