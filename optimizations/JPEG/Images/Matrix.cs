@@ -15,7 +15,6 @@ class Matrix
 		Width = width;
 
 		Pixels = new Pixel[height, width];
-		// Pixels = GC.AllocateUninitializedArray<Pixel>(height * width);
 	}
 
 	public static explicit operator Matrix(Bitmap bmp)

@@ -205,40 +205,46 @@ public class JpegProcessor : IJpegProcessor
 		var partitioner = Partitioner.Create(0, chunksCount, chunksCount / Environment.ProcessorCount);
 		Parallel.ForEach(partitioner, range =>
 		{
+			var outputY = GC.AllocateUninitializedArray<float>(DCTSize * DCTSize);
+			var outputCb = GC.AllocateUninitializedArray<float>(DCTSize * DCTSize);
+			var outputCr = GC.AllocateUninitializedArray<float>(DCTSize * DCTSize);
+			var channelFrequenciesArray = GC.AllocateUninitializedArray<float>(DCTSize * DCTSize);
+			var quantizedFrequenciesArray = GC.AllocateUninitializedArray<byte>(DCTSize * DCTSize);
+			
 			for (int i = range.Item1; i < range.Item2; i++)
 			{
 				var x = (i % width) * DCTSize;
 				var y = (i / width) * DCTSize;
 				var byteIndex = i * 3 * sizeSquared;
 				
-				float[] _y;
+				// Y
 				{
 					var byteSpan = new Span<byte>(allQuantizedBytes, byteIndex, sizeSquared);
-					var quantizedFreqs = ZigZagUnScan(byteSpan);
-					var channelFreqs = DeQuantize(quantizedFreqs);
-					_y = DCT.IDCT2D(channelFreqs);
-					ShiftMatrixValues(_y, 128);
+					var quantizedFreqs = ZigZagUnScan(byteSpan, quantizedFrequenciesArray);
+					var channelFreqs = DeQuantize(quantizedFreqs, channelFrequenciesArray);
+					DCT.IDCT2D(channelFreqs, outputY);
+					ShiftMatrixValues(outputY, 128);
 				}
 					
-				float[] cb;
+				// Cb
 				{
 					var byteSpan = new Span<byte>(allQuantizedBytes, byteIndex + sizeSquared, sizeSquared);
-					var quantizedFreqs = ZigZagUnScan(byteSpan);
-					var channelFreqs = DeQuantize(quantizedFreqs);
-					cb = DCT.IDCT2D(channelFreqs);
-					ShiftMatrixValues(cb, 128);
+					var quantizedFreqs = ZigZagUnScan(byteSpan, quantizedFrequenciesArray);
+					var channelFreqs = DeQuantize(quantizedFreqs, channelFrequenciesArray);
+					DCT.IDCT2D(channelFreqs, outputCb);
+					ShiftMatrixValues(outputCb, 128);
 				}
 					
-				float[] cr;
+				// Cr
 				{
 					var byteSpan = new Span<byte>(allQuantizedBytes, byteIndex + sizeSquared * 2, sizeSquared);
-					var quantizedFreqs = ZigZagUnScan(byteSpan);
-					var channelFreqs = DeQuantize(quantizedFreqs);
-					cr = DCT.IDCT2D(channelFreqs);
-					ShiftMatrixValues(cr, 128);
+					var quantizedFreqs = ZigZagUnScan(byteSpan, quantizedFrequenciesArray);
+					var channelFreqs = DeQuantize(quantizedFreqs, channelFrequenciesArray);
+					DCT.IDCT2D(channelFreqs, outputCr);
+					ShiftMatrixValues(outputCr, 128);
 				}
 		
-				SetPixels(result, _y, cb, cr, y, x);
+				SetPixels(result, outputY, outputCb, outputCr, y, x);
 			}
 		});
 		
@@ -318,43 +324,39 @@ public class JpegProcessor : IJpegProcessor
 		return result;
 	}
 
-	private static byte[,] ZigZagUnScan(Span<byte> quantizedBytes)
+	private static byte[] ZigZagUnScan(Span<byte> quantizedBytes, byte[] result)
 	{
-		return new[,]
-		{
-			{
-				quantizedBytes[0], quantizedBytes[1], quantizedBytes[5], quantizedBytes[6], quantizedBytes[14],
-				quantizedBytes[15], quantizedBytes[27], quantizedBytes[28]
-			},
-			{
-				quantizedBytes[2], quantizedBytes[4], quantizedBytes[7], quantizedBytes[13], quantizedBytes[16],
-				quantizedBytes[26], quantizedBytes[29], quantizedBytes[42]
-			},
-			{
-				quantizedBytes[3], quantizedBytes[8], quantizedBytes[12], quantizedBytes[17], quantizedBytes[25],
-				quantizedBytes[30], quantizedBytes[41], quantizedBytes[43]
-			},
-			{
-				quantizedBytes[9], quantizedBytes[11], quantizedBytes[18], quantizedBytes[24], quantizedBytes[31],
-				quantizedBytes[40], quantizedBytes[44], quantizedBytes[53]
-			},
-			{
-				quantizedBytes[10], quantizedBytes[19], quantizedBytes[23], quantizedBytes[32], quantizedBytes[39],
-				quantizedBytes[45], quantizedBytes[52], quantizedBytes[54]
-			},
-			{
-				quantizedBytes[20], quantizedBytes[22], quantizedBytes[33], quantizedBytes[38], quantizedBytes[46],
-				quantizedBytes[51], quantizedBytes[55], quantizedBytes[60]
-			},
-			{
-				quantizedBytes[21], quantizedBytes[34], quantizedBytes[37], quantizedBytes[47], quantizedBytes[50],
-				quantizedBytes[56], quantizedBytes[59], quantizedBytes[61]
-			},
-			{
-				quantizedBytes[35], quantizedBytes[36], quantizedBytes[48], quantizedBytes[49], quantizedBytes[57],
+		(
+			result[0], result[1], result[2], result[3], result[4], result[5], result[6], result[7],
+			result[8], result[9], result[10], result[11], result[12], result[13], result[14], result[15],
+			result[16], result[17], result[18], result[19], result[20], result[21], result[22], result[23],
+			result[24], result[25], result[26], result[27], result[28], result[29], result[30], result[31],
+			result[32], result[33], result[34], result[35], result[36], result[37], result[38], result[39],
+			result[40], result[41], result[42], result[43], result[44], result[45], result[46], result[47],
+			result[48], result[49], result[50], result[51], result[52], result[53], result[54], result[55],
+			result[56], result[57], result[58], result[59], result[60], result[61], result[62], result[63]
+		)
+		=
+		(
+			quantizedBytes[0], quantizedBytes[1], quantizedBytes[5], quantizedBytes[6], quantizedBytes[14],
+				quantizedBytes[15], quantizedBytes[27], quantizedBytes[28],
+			quantizedBytes[2], quantizedBytes[4], quantizedBytes[7], quantizedBytes[13], quantizedBytes[16],
+				quantizedBytes[26], quantizedBytes[29], quantizedBytes[42],
+			quantizedBytes[3], quantizedBytes[8], quantizedBytes[12], quantizedBytes[17], quantizedBytes[25],
+				quantizedBytes[30], quantizedBytes[41], quantizedBytes[43],
+			quantizedBytes[9], quantizedBytes[11], quantizedBytes[18], quantizedBytes[24], quantizedBytes[31],
+				quantizedBytes[40], quantizedBytes[44], quantizedBytes[53],
+			quantizedBytes[10], quantizedBytes[19], quantizedBytes[23], quantizedBytes[32], quantizedBytes[39],
+				quantizedBytes[45], quantizedBytes[52], quantizedBytes[54],
+			quantizedBytes[20], quantizedBytes[22], quantizedBytes[33], quantizedBytes[38], quantizedBytes[46],
+				quantizedBytes[51], quantizedBytes[55], quantizedBytes[60],
+			quantizedBytes[21], quantizedBytes[34], quantizedBytes[37], quantizedBytes[47], quantizedBytes[50],
+				quantizedBytes[56], quantizedBytes[59], quantizedBytes[61],
+			quantizedBytes[35], quantizedBytes[36], quantizedBytes[48], quantizedBytes[49], quantizedBytes[57],
 				quantizedBytes[58], quantizedBytes[62], quantizedBytes[63]
-			}
-		};
+		);
+
+		return result;
 	}
 
 	private static byte[] Quantize(float[] channelFreqs, byte[] result)
@@ -370,16 +372,14 @@ public class JpegProcessor : IJpegProcessor
 		return result;
 	}
 
-	private static float[] DeQuantize(byte[,] quantizedBytes)
+	private static float[] DeQuantize(byte[] quantizedBytes, float[] result)
 	{
-		var result = GC.AllocateUninitializedArray<float>(DCTSize * DCTSize);
-
 		for (int y = 0; y < DCTSize; y++)
 		{
 			for (int x = 0; x < DCTSize; x++)
 			{
 				result[y * DCTSize + x] =
-					((sbyte)quantizedBytes[y, x]) *
+					((sbyte)quantizedBytes[y * DCTSize + x]) *
 					QuantizationMatrix[y, x]; //NOTE cast to sbyte not to lose negative numbers
 			}
 		}

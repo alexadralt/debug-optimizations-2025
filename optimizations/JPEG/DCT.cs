@@ -86,11 +86,10 @@ public class DCT
 		return coeffs;
 	}
 
-	public static float[] IDCT2D(float[] coeffs)
+	public static void IDCT2D(float[] coeffs, float[] output)
 	{
 		var beta = 2f * (1f / JpegProcessor.DCTSize);
 		var squaredSize = JpegProcessor.DCTSize * JpegProcessor.DCTSize;
-		var output = GC.AllocateUninitializedArray<float>(squaredSize);
 		
 		for (var x = 0; x < JpegProcessor.DCTSize; x++)
 		{
@@ -130,8 +129,6 @@ public class DCT
 				output[x * JpegProcessor.DCTSize + y] = sum * beta;
 			}
 		}
-
-		return output;
 	}
 
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
