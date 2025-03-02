@@ -8,5 +8,6 @@ internal class Program
 	public static void Main(string[] args)
 	{
 		BenchmarkRunner.Run<JpegProcessorBenchmark>();
+		// BenchmarkRunner.Run<JpegEarthBenchmark>();
 	}
 }
