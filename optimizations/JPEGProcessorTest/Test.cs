@@ -11,9 +11,16 @@ public class Test
         VerifyImageSharp.Initialize();
     
     [Test]
-    public Task VerifyImage()
+    public Task VerifySample()
     {
         var imagePath = new App().Run(@"sample.bmp");
+        return VerifyFile(imagePath);
+    }
+    
+    [Test]
+    public Task VerifyMarbles()
+    {
+        var imagePath = new App().Run(@"MARBLES.bmp");
         return VerifyFile(imagePath);
     }
 }
