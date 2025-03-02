@@ -103,7 +103,7 @@ class HuffmanCodec
 
 	public static byte[] Decode(byte[] encodedData, Dictionary<BitsWithLength, byte> decodeTable, long bitsCount)
 	{
-		var result = new List<byte>();
+		var result = new List<byte>(encodedData.Length);
 
 		byte decodedByte;
 		var sample = new BitsWithLength { Bits = 0, BitsCount = 0 };
