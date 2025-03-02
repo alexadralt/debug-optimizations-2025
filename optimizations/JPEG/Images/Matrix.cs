@@ -26,6 +26,7 @@ class Matrix
 		var width = bmpWidth - bmpWidth % 8;
 
 		var data = bmp.LockBits(new Rectangle(0, 0, bmpWidth, bmpHeight), ImageLockMode.ReadOnly, bmp.PixelFormat);
+		var stride = data.Stride;
 		
 		var matrix = new Matrix(height, width);
 
@@ -35,13 +36,14 @@ class Matrix
 			fixed (Pixel* ptr = matrix.Pixels)
 			{
 				var pixel = ptr;
-				for (var i = 0; i < height; i++)
+				for (var i = 0; i < height; i++, dataPtr += stride)
 				{
+					var rowPtr = dataPtr;
 					for (var j = 0; j < width; j++, pixel++)
 					{
-						pixel->value3 = *dataPtr++; // blue
-						pixel->value2 = *dataPtr++; // green
-						pixel->value1 = *dataPtr++; // red
+						pixel->value3 = *rowPtr++; // blue
+						pixel->value2 = *rowPtr++; // green
+						pixel->value1 = *rowPtr++; // red
 					}
 				}
 			}
@@ -58,6 +60,7 @@ class Matrix
 		var pixelFormat = System.Drawing.Imaging.PixelFormat.Format24bppRgb;
 		var bmp = new Bitmap(width, height, pixelFormat);
 		var data = bmp.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.WriteOnly, pixelFormat);
+		var stride = data.Stride;
 
 		unsafe
 		{
@@ -65,23 +68,24 @@ class Matrix
 			fixed (Pixel* ptr = matrix.Pixels)
 			{
 				var pixel = ptr;
-				for (var i = 0; i < height; i++)
+				for (var i = 0; i < height; i++, dataPtr += stride)
 				{
+					var rowPtr = dataPtr;
 					for (var j = 0; j < width; j++, pixel++)
 					{
 						// blue channel
-						*dataPtr = ToByte((298.082f * pixel->value1 + 516.412f * pixel->value2) / 256.0f - 276.836f);
-						dataPtr++;
+						*rowPtr = ToByte((298.082f * pixel->value1 + 516.412f * pixel->value2) / 256.0f - 276.836f);
+						rowPtr++;
 						
 						// green channel
-						*dataPtr = ToByte(
+						*rowPtr = ToByte(
 							(298.082f * pixel->value1 - 100.291f * pixel->value2 - 208.120f * pixel->value3) / 256.0f +
 							135.576f);
-						dataPtr++;
+						rowPtr++;
 						
 						// red channel
-						*dataPtr = ToByte((298.082f * pixel->value1 + 408.583f * pixel->value3) / 256.0f - 222.921f);
-						dataPtr++;
+						*rowPtr = ToByte((298.082f * pixel->value1 + 408.583f * pixel->value3) / 256.0f - 222.921f);
+						rowPtr++;
 					}
 				}
 			}
